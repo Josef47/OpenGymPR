@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Same artwork as web/icons (512 grid), scaled into the adaptive-icon safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="512" android:viewportHeight="512">
+    <group android:scaleX="0.62" android:scaleY="0.62" android:pivotX="256" android:pivotY="256">
+        <path android:strokeColor="#C6FF3D" android:strokeWidth="30" android:strokeLineCap="round" android:strokeLineJoin="round"
+            android:pathData="M96,380 L196,300 L276,336 L416,176" />
+        <path android:fillColor="#F2F3F5" android:pathData="M88,236h336a8,8 0 0 1 0,16h-336a8,8 0 0 1 0,-16z" />
+        <path android:fillColor="#F2F3F5" android:pathData="M120,184h14a8,8 0 0 1 8,8v104a8,8 0 0 1 -8,8h-14a8,8 0 0 1 -8,-8v-104a8,8 0 0 1 8,-8z" />
+        <path android:fillColor="#F2F3F5" android:pathData="M156,201h14a8,8 0 0 1 8,8v70a8,8 0 0 1 -8,8h-14a8,8 0 0 1 -8,-8v-70a8,8 0 0 1 8,-8z" />
+        <path android:fillColor="#F2F3F5" android:pathData="M340,201h14a8,8 0 0 1 8,8v70a8,8 0 0 1 -8,8h-14a8,8 0 0 1 -8,-8v-70a8,8 0 0 1 8,-8z" />
+        <path android:fillColor="#F2F3F5" android:pathData="M372,184h14a8,8 0 0 1 8,8v104a8,8 0 0 1 -8,8h-14a8,8 0 0 1 -8,-8v-104a8,8 0 0 1 8,-8z" />
+    </group>
+</vector>
