@@ -16,4 +16,4 @@ OpenGymPR does not collect, store on a server, share, or sell any personal data.
 
 The source code is public (MIT licence), so anyone can verify these statements.
 
-Contact: TODO (e-mail address for the Play listing)
+Contact: info@m56software.com

@@ -3,7 +3,7 @@
 **App name (max 30):** OpenGymPR: Lift Log & PRs
 
 **Short description (max 80):**
-Log your lifts, see your PRs. Free, no ads, no account. Your data stays on your phone.
+Log lifts, see PRs. Free, no ads, no account. Your data stays on your phone.
 
 **Full description:**
 OpenGymPR is a simple, fast gym log that does one thing well: tracking your lifts and your personal records.
@@ -27,7 +27,6 @@ NO NONSENSE
 • No internet permission: your data cannot leave your phone.
 • Export to JSON or CSV any time, import on a new phone.
 • kg or lb, dark or light theme.
-• Open source (MIT).
 
 **Category:** Health & Fitness · **Contains ads:** No · **In-app purchases:** No
 **Data safety:** No data collected · No data shared
