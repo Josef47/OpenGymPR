@@ -140,6 +140,7 @@ fun deleteWithUndo(store: Store, set: LiftSet, snack: SnackbarHostState, scope: 
 fun LogScreen(store: Store, snack: SnackbarHostState, modifier: Modifier, onOpen: (Long) -> Unit) {
     val scope = rememberCoroutineScope()
     val haptic = LocalHapticFeedback.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     val exId = store.current
     val hist = store.setsOf(exId)
     val prev = hist.lastOrNull()
@@ -174,6 +175,15 @@ fun LogScreen(store: Store, snack: SnackbarHostState, modifier: Modifier, onOpen
 
     LazyColumn(modifier.fillMaxSize().imePadding(), contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Header() }
+        if (store.feedbackDue()) item {
+            FeedbackPrompt(store.trainingDays(),
+                onSend = {
+                    store.feedbackDone()
+                    if (!sendFeedbackMail(ctx)) scope.launch { snack.showSnackbar(AppSnack("No mail app found. Write to $FEEDBACK_EMAIL")) }
+                },
+                onLater = { store.feedbackLater() },
+                onNever = { store.feedbackDone() })
+        }
         item {
             Card {
                 Column(Modifier.padding(16.dp)) {

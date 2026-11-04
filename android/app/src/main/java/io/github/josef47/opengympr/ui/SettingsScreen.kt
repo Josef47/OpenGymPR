@@ -94,6 +94,17 @@ fun SettingsScreen(store: Store, snack: SnackbarHostState, modifier: Modifier) {
                 }
             }
         }
+        item { Section("Feedback") }
+        item {
+            Card {
+                Column(Modifier.padding(16.dp)) {
+                    Text("Found a bug or missing something? Your mail app opens with a draft to $FEEDBACK_EMAIL — nothing is sent until you press send.",
+                        color = c.onSurfaceVariant, fontSize = 13.sp)
+                    Action("Send feedback (email)") { if (!sendFeedbackMail(ctx)) say("No mail app found. Write to $FEEDBACK_EMAIL") }
+                    Action("Report on GitHub") { if (!openIssues(ctx)) say("No browser found") }
+                }
+            }
+        }
         item { Section("The deal") }
         item {
             Card {

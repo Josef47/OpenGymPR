@@ -12,11 +12,29 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
 
+/** Added in DB v3 (app 1.1.0); also inserted into existing installs on upgrade. */
+private val V3_EXERCISES = listOf(
+    // chest
+    "Incline Dumbbell Press", "Decline Bench Press", "Machine Chest Press", "Pec Deck", "Cable Fly", "Push-up",
+    // back
+    "Dumbbell Row", "Seated Cable Row", "T-Bar Row", "Chin-up", "Face Pull", "Shrug", "Back Extension",
+    // shoulders
+    "Shoulder Press", "Machine Shoulder Press", "Arnold Press", "Lateral Raise", "Front Raise", "Rear Delt Fly", "Upright Row",
+    // arms
+    "Barbell Curl", "Hammer Curl", "Preacher Curl", "Cable Curl", "Skull Crusher", "Overhead Tricep Extension", "Close-Grip Bench Press",
+    // legs
+    "Hack Squat", "Goblet Squat", "Bulgarian Split Squat", "Lunge", "Sumo Deadlift", "Trap Bar Deadlift",
+    "Seated Calf Raise", "Hip Abduction", "Hip Adduction",
+    // core
+    "Cable Crunch", "Hanging Leg Raise",
+)
+
 val DEFAULT_EXERCISES = listOf(
     "Bench Press", "Squat", "Deadlift", "Overhead Press", "Barbell Row", "Pull-up", "Incline Bench Press",
     "Romanian Deadlift", "Front Squat", "Dumbbell Bench Press", "Dumbbell Shoulder Press", "Lat Pulldown",
     "Leg Press", "Hip Thrust", "Dips", "Bicep Curl", "Tricep Pushdown", "Leg Curl", "Leg Extension", "Calf Raise",
-)
+) + V3_EXERCISES
+
 
 enum class WeightUnit(val label: String, val kgPer: Double, val step: Double) {
     KG("kg", 1.0, 2.5), LB("lb", 0.45359237, 5.0)
@@ -24,7 +42,7 @@ enum class WeightUnit(val label: String, val kgPer: Double, val step: Double) {
 
 enum class ThemeMode { AUTO, DARK, LIGHT }
 
-private class Db(ctx: Context) : SQLiteOpenHelper(ctx, "opengympr.db", null, 2) {
+private class Db(ctx: Context) : SQLiteOpenHelper(ctx, "opengympr.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE exercise (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE COLLATE NOCASE, custom INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE lift_set (id INTEGER PRIMARY KEY AUTOINCREMENT, exercise_id INTEGER NOT NULL REFERENCES exercise(id) ON DELETE CASCADE, weight_kg REAL NOT NULL, reps INTEGER NOT NULL, ts INTEGER NOT NULL)")
@@ -38,7 +56,11 @@ private class Db(ctx: Context) : SQLiteOpenHelper(ctx, "opengympr.db", null, 2) 
         db.execSQL("CREATE TABLE schedule_done (schedule_id INTEGER NOT NULL REFERENCES schedule(id) ON DELETE CASCADE, day INTEGER NOT NULL, PRIMARY KEY (schedule_id, day))")
     }
     override fun onConfigure(db: SQLiteDatabase) = db.setForeignKeyConstraintsEnabled(true)
-    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) { if (old < 2) createSchedule(db) }
+    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) {
+        if (old < 2) createSchedule(db)
+        // Name is UNIQUE COLLATE NOCASE: a user's own exercise with the same name is kept as it is.
+        if (old < 3) V3_EXERCISES.forEach { db.insertWithOnConflict("exercise", null, ContentValues().apply { put("name", it) }, SQLiteDatabase.CONFLICT_IGNORE) }
+    }
 }
 
 /**
@@ -59,6 +81,8 @@ class Store(ctx: Context) {
         private set
     var current by mutableStateOf(prefs.getLong("last", -1))
         private set
+    /** Training-day count at which the feedback card shows; -1 = never ask again. */
+    private var feedbackAt by mutableStateOf(prefs.getInt("fb_at", 5))
 
     init { reload() }
 
@@ -131,6 +155,23 @@ class Store(ctx: Context) {
         reload()
         select(exercises.first().id)
     }
+
+    // ---------- feedback prompt ----------
+
+    /** Number of distinct days with at least one logged set. */
+    fun trainingDays() = sets.mapTo(HashSet()) { localDay(it.time) }.size
+
+    fun feedbackDue() = feedbackAt > 0 && trainingDays() >= feedbackAt
+
+    /** "Later": ask once more after 3 more training days; a second "Later" stops asking. */
+    fun feedbackLater() {
+        val asks = prefs.getInt("fb_asks", 0) + 1
+        feedbackAt = if (asks >= 2) -1 else trainingDays() + 3
+        prefs.edit().putInt("fb_asks", asks).putInt("fb_at", feedbackAt).apply()
+    }
+
+    /** Sent, or "No thanks": never show the card again (Settings keeps the option). */
+    fun feedbackDone() { feedbackAt = -1; prefs.edit().putInt("fb_at", -1).apply() }
 
     // ---------- weekly schedule ----------
 
