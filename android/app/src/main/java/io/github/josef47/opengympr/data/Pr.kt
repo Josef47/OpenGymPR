@@ -9,6 +9,12 @@ data class LiftSet(val id: Long, val exerciseId: Long, val weightKg: Double, val
 
 data class Exercise(val id: Long, val name: String, val custom: Boolean)
 
+/** One exercise planned on a weekday. [dow] is ISO: 1 = Monday ... 7 = Sunday. Repeats every week. */
+data class ScheduleItem(val id: Long, val exerciseId: Long, val dow: Int, val pos: Int)
+
+/** A manual check-off of a schedule item on one date ([day] = LocalDate.toEpochDay). */
+data class DoneMark(val scheduleId: Long, val day: Long)
+
 /** e1RM is only meaningful for lower rep ranges. */
 const val E1RM_MAX_REPS = 12
 

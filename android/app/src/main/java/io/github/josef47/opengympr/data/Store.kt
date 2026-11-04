@@ -24,15 +24,21 @@ enum class WeightUnit(val label: String, val kgPer: Double, val step: Double) {
 
 enum class ThemeMode { AUTO, DARK, LIGHT }
 
-private class Db(ctx: Context) : SQLiteOpenHelper(ctx, "opengympr.db", null, 1) {
+private class Db(ctx: Context) : SQLiteOpenHelper(ctx, "opengympr.db", null, 2) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE exercise (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE COLLATE NOCASE, custom INTEGER NOT NULL DEFAULT 0)")
         db.execSQL("CREATE TABLE lift_set (id INTEGER PRIMARY KEY AUTOINCREMENT, exercise_id INTEGER NOT NULL REFERENCES exercise(id) ON DELETE CASCADE, weight_kg REAL NOT NULL, reps INTEGER NOT NULL, ts INTEGER NOT NULL)")
         db.execSQL("CREATE INDEX ix_set_ex_ts ON lift_set(exercise_id, ts)")
         DEFAULT_EXERCISES.forEach { db.insert("exercise", null, ContentValues().apply { put("name", it) }) }
+        createSchedule(db)
+    }
+    /** v2: weekly schedule (repeats every week) and manual check-offs per date. */
+    private fun createSchedule(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE schedule (id INTEGER PRIMARY KEY AUTOINCREMENT, exercise_id INTEGER NOT NULL REFERENCES exercise(id) ON DELETE CASCADE, dow INTEGER NOT NULL, pos INTEGER NOT NULL)")
+        db.execSQL("CREATE TABLE schedule_done (schedule_id INTEGER NOT NULL REFERENCES schedule(id) ON DELETE CASCADE, day INTEGER NOT NULL, PRIMARY KEY (schedule_id, day))")
     }
     override fun onConfigure(db: SQLiteDatabase) = db.setForeignKeyConstraintsEnabled(true)
-    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, old: Int, new: Int) { if (old < 2) createSchedule(db) }
 }
 
 /**
@@ -45,6 +51,8 @@ class Store(ctx: Context) {
 
     val exercises = mutableStateListOf<Exercise>()
     val sets = mutableStateListOf<LiftSet>()            // oldest first
+    val schedule = mutableStateListOf<ScheduleItem>()
+    val doneMarks = mutableStateListOf<DoneMark>()
     var unit by mutableStateOf(WeightUnit.valueOf(prefs.getString("unit", "KG")!!))
         private set
     var theme by mutableStateOf(ThemeMode.valueOf(prefs.getString("theme", "AUTO")!!))
@@ -55,12 +63,18 @@ class Store(ctx: Context) {
     init { reload() }
 
     private fun reload() {
-        exercises.clear(); sets.clear()
+        exercises.clear(); sets.clear(); schedule.clear(); doneMarks.clear()
         db.rawQuery("SELECT id, name, custom FROM exercise", null).use { c ->
             while (c.moveToNext()) exercises += Exercise(c.getLong(0), c.getString(1), c.getInt(2) == 1)
         }
         db.rawQuery("SELECT id, exercise_id, weight_kg, reps, ts FROM lift_set ORDER BY ts", null).use { c ->
             while (c.moveToNext()) sets += LiftSet(c.getLong(0), c.getLong(1), c.getDouble(2), c.getInt(3), c.getLong(4))
+        }
+        db.rawQuery("SELECT id, exercise_id, dow, pos FROM schedule ORDER BY dow, pos", null).use { c ->
+            while (c.moveToNext()) schedule += ScheduleItem(c.getLong(0), c.getLong(1), c.getInt(2), c.getInt(3))
+        }
+        db.rawQuery("SELECT schedule_id, day FROM schedule_done", null).use { c ->
+            while (c.moveToNext()) doneMarks += DoneMark(c.getLong(0), c.getLong(1))
         }
         if (exercises.none { it.id == current }) current = exercises.firstOrNull()?.id ?: -1
     }
@@ -106,6 +120,8 @@ class Store(ctx: Context) {
         db.delete("exercise", "id = ?", arrayOf(id.toString()))   // sets go with it (ON DELETE CASCADE)
         exercises.removeAll { it.id == id }
         sets.removeAll { it.exerciseId == id }
+        val gone = schedule.filter { it.exerciseId == id }.map { it.id }.toSet()
+        schedule.removeAll { it.id in gone }; doneMarks.removeAll { it.scheduleId in gone }
         if (current == id) select(exercises.firstOrNull()?.id ?: -1)
     }
 
@@ -114,6 +130,48 @@ class Store(ctx: Context) {
         db.transaction { DEFAULT_EXERCISES.forEach { insert("exercise", null, ContentValues().apply { put("name", it) }) } }
         reload()
         select(exercises.first().id)
+    }
+
+    // ---------- weekly schedule ----------
+
+    /** Items for a weekday (1 = Monday ... 7 = Sunday), in the order they were added. */
+    fun scheduleFor(dow: Int) = schedule.filter { it.dow == dow }.sortedBy { it.pos }
+
+    /** Adds an exercise to a weekday; no-op (returns null) if it is already there. */
+    fun addToSchedule(exerciseId: Long, dow: Int): ScheduleItem? {
+        if (schedule.any { it.dow == dow && it.exerciseId == exerciseId }) return null
+        val pos = (schedule.filter { it.dow == dow }.maxOfOrNull { it.pos } ?: -1) + 1
+        val id = db.insertOrThrow("schedule", null, ContentValues().apply { put("exercise_id", exerciseId); put("dow", dow); put("pos", pos) })
+        return ScheduleItem(id, exerciseId, dow, pos).also { schedule += it }
+    }
+
+    /** Removes an item; returns its check-offs so [restoreSchedule] can undo. */
+    fun removeFromSchedule(item: ScheduleItem): List<DoneMark> {
+        val marks = doneMarks.filter { it.scheduleId == item.id }
+        db.delete("schedule", "id = ?", arrayOf(item.id.toString()))   // marks go with it (ON DELETE CASCADE)
+        schedule.removeAll { it.id == item.id }; doneMarks.removeAll { it.scheduleId == item.id }
+        return marks
+    }
+
+    fun restoreSchedule(item: ScheduleItem, marks: List<DoneMark>) {
+        if (exercise(item.exerciseId) == null || schedule.any { it.id == item.id }) return
+        db.transaction {
+            insertOrThrow("schedule", null, ContentValues().apply { put("id", item.id); put("exercise_id", item.exerciseId); put("dow", item.dow); put("pos", item.pos) })
+            marks.forEach { insert("schedule_done", null, ContentValues().apply { put("schedule_id", it.scheduleId); put("day", it.day) }) }
+        }
+        schedule += item; doneMarks += marks
+    }
+
+    fun isChecked(item: ScheduleItem, epochDay: Long) = doneMarks.any { it.scheduleId == item.id && it.day == epochDay }
+
+    fun toggleCheck(item: ScheduleItem, epochDay: Long) {
+        if (isChecked(item, epochDay)) {
+            db.delete("schedule_done", "schedule_id = ? AND day = ?", arrayOf(item.id.toString(), epochDay.toString()))
+            doneMarks.removeAll { it.scheduleId == item.id && it.day == epochDay }
+        } else {
+            db.insertWithOnConflict("schedule_done", null, ContentValues().apply { put("schedule_id", item.id); put("day", epochDay) }, SQLiteDatabase.CONFLICT_IGNORE)
+            doneMarks += DoneMark(item.id, epochDay)
+        }
     }
 
     // ---------- backup: same JSON format as the web version (v1) ----------
@@ -126,6 +184,10 @@ class Store(ctx: Context) {
         })
         o.put("sets", JSONArray().apply {
             sets.forEach { put(JSONObject().put("id", it.id.toString()).put("e", it.exerciseId.toString()).put("w", it.weightKg).put("r", it.reps).put("t", it.time)) }
+        })
+        // Optional key: older versions (and the web prototype) ignore it.
+        o.put("schedule", JSONArray().apply {
+            schedule.forEach { put(JSONObject().put("e", it.exerciseId.toString()).put("d", it.dow)) }
         })
         return o.toString(1)
     }
@@ -165,6 +227,15 @@ class Store(ctx: Context) {
                 if (w.isNaN() || w < 0 || r < 1 || t <= 0) continue
                 insert("lift_set", null, ContentValues().apply { put("exercise_id", ex); put("weight_kg", w); put("reps", r); put("ts", t) })
                 count++
+            }
+            val sch = o.optJSONArray("schedule")
+            if (sch != null) for (i in 0 until sch.length()) {
+                val s = sch.getJSONObject(i)
+                val ex = idMap[s.optString("e")] ?: continue
+                val d = s.optInt("d", 0)
+                if (d !in 1..7) continue
+                if (rawQuery("SELECT 1 FROM schedule WHERE exercise_id = ? AND dow = ?", arrayOf(ex.toString(), d.toString())).use { it.moveToFirst() }) continue
+                insert("schedule", null, ContentValues().apply { put("exercise_id", ex); put("dow", d); put("pos", i) })
             }
         }
         o.optString("unit").let { if (it == "lb") changeUnit(WeightUnit.LB) else if (it == "kg") changeUnit(WeightUnit.KG) }

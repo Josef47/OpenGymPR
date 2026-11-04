@@ -270,7 +270,7 @@ private fun StepButton(sym: String, desc: String, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ExercisePicker(store: Store, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
+internal fun ExercisePicker(store: Store, onDismiss: () -> Unit, onPick: (Long) -> Unit) {
     var q by remember { mutableStateOf("") }
     val counts = store.sets.groupingBy { it.exerciseId }.eachCount()
     val term = q.trim()

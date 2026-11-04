@@ -31,6 +31,7 @@ import io.github.josef47.opengympr.ui.LogScreen
 import io.github.josef47.opengympr.ui.OpenGymTheme
 import io.github.josef47.opengympr.ui.PrSnackbar
 import io.github.josef47.opengympr.ui.ProgressScreen
+import io.github.josef47.opengympr.ui.ScheduleScreen
 import io.github.josef47.opengympr.ui.SettingsScreen
 import io.github.josef47.opengympr.ui.isDark
 
@@ -51,7 +52,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-private enum class Tab(val label: String) { LOG("Log"), PROGRESS("Progress"), SETTINGS("Settings") }
+private enum class Tab(val label: String) { LOG("Log"), SCHEDULE("Schedule"), PROGRESS("Progress"), SETTINGS("Settings") }
 
 @Composable
 private fun App(store: Store) {
@@ -72,7 +73,7 @@ private fun App(store: Store) {
                     NavigationBarItem(
                         selected = tab == t && (detail == null || t == Tab.PROGRESS),
                         onClick = { tab = t; detail = null },
-                        icon = { Icon(when (t) { Tab.LOG -> Ico.Plus; Tab.PROGRESS -> Ico.Chart; Tab.SETTINGS -> Ico.Gear }, null) },
+                        icon = { Icon(when (t) { Tab.LOG -> Ico.Plus; Tab.SCHEDULE -> Ico.Calendar; Tab.PROGRESS -> Ico.Chart; Tab.SETTINGS -> Ico.Gear }, null) },
                         label = { Text(t.label) },
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.primary,
@@ -90,6 +91,7 @@ private fun App(store: Store) {
             detail != null -> DetailScreen(store, detail!!, snack, m, onBack = { detail = null },
                 onLog = { store.select(it); detail = null; tab = Tab.LOG })
             tab == Tab.LOG -> LogScreen(store, snack, m, onOpen = open)
+            tab == Tab.SCHEDULE -> ScheduleScreen(store, snack, m, onLog = { store.select(it); tab = Tab.LOG })
             tab == Tab.PROGRESS -> ProgressScreen(store, m, onOpen = open)
             else -> SettingsScreen(store, snack, m)
         }

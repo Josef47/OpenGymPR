@@ -58,4 +58,7 @@ object Ico {
     val Back = strokeIcon("back", "M15 5l-7 7 7 7")
     val Close = strokeIcon("close", "M7 7l10 10M17 7L7 17")
     val Down = strokeIcon("down", "M6 9l6 6 6-6")
+    val Forward = strokeIcon("forward", "M9 5l7 7-7 7")
+    val Check = strokeIcon("check", "M5 12.5l4.5 4.5L19 7.5")
+    val Calendar = strokeIcon("calendar", "M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z", "M4 10h16M8 3v4M16 3v4")
 }
